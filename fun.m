@@ -1,2 +1,2 @@
 function f = fun(x,lb,ub,ht)
-f = sum(((ub - x).*ht) + ((ht/75).*(x - lb)));
+f = -0.001*sum(ht.*(x - lb)./((1+ht)./(ub - x)));
