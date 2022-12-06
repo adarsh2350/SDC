@@ -90,7 +90,7 @@ end
 temp2 = ul_cost;
 h_ul = zeros(K,n*n);
 for i = 1:K
-  h_ul(i,:) = reshape(temp1(:,:,i),1,[]);  
+  h_ul(i,:) = reshape(temp2(:,:,i),1,[]);  
 end
 
 temp3 = t_freq;
@@ -101,75 +101,130 @@ end
 
 
 
-%%% Determining new cost vis sTLBO
+%%% Determining new cost via sTLBO
 
 new_cost = zeros(n,n,K);  % new pricing
 
-for q = 1:K
 
-    %% problwm setting
-    prob = @fun;   % fitness function
-    lb = h_ll(q,:);     % lower bound
-    ub = h_ul(q,:);   % upper bound
-    %% Algorithm parameters
-    Np = 10;        % Population size
-    T = 50;         % No. of iterations
-    %% starting of TLBO
-    f = NaN(Np,1);   % vector to store fitness value
-    D = length(lb);  % determining no. of decision variables
-    P = repmat(lb,Np,1) + repmat((ub-lb),Np,1).*rand(Np,D);   % initial population
+
+for q = 1:2
+
+    Q = 10;  % number of Runs
+    fun_eval = 1:Q;
+    fitness_value = zeros(1,Q);
+    least_val = 0;
+    best_fitness_value = zeros(1,Q);
+
+
+    for iteration = 1:Q
     
-    for i = 1:Np              % evaluating fitnessfunction
-       f(i) = prob(P(i,:),lb,ub,htf(q,:));
-    end
+        %% problwm setting
+        prob = @fun;   % fitness function
+        lb = h_ll(q,:);     % lower bound
+        ub = h_ul(q,:);   % upper bound
+        %% Algorithm parameters
+        Np = 10;        % Population size
+        T = 50;         % No. of iterations
+        %% starting of TLBO
+        f = NaN(Np,1);   % vector to store fitness value
+        D = length(lb);  % determining no. of decision variables
+        P = repmat(lb,Np,1) + repmat((ub-lb),Np,1).*rand(Np,D);   % initial population
+        
+        for i = 1:Np              % evaluating fitnessfunction
+           f(i) = prob(P(i,:),lb,ub,htf(q,:));
+        end
+        
+        %% iteration loop
+        
+        plotx = 0:T;
+        ploty = zeros(1,T+1);
+        ploty(1) = min(f);
+        
+        for t = 1:T
 
-    %% iteration loop
-    for t = 1:T
-      
-       for i=1:Np
-      
-           % Teacher phase
-           Xmean = mean(P);
+            for i=1:Np
           
-           [~,ind] = min(f);
-           Xbest = P(ind,:);
-           TF = randi([1,2],1,1);
-           Xnew = P(i,:) + rand(1,D).*(Xbest - TF*Xmean);
-           Xnew = min(ub,Xnew);
-           Xnew = max(lb,Xnew);
+               % Teacher phase
+               Xmean = mean(P);
+              
+               [~,ind] = min(f);
+               Xbest = P(ind,:);
+               TF = randi([1,2],1,1);
+               Xnew = P(i,:) + rand(1,D).*(Xbest - TF*Xmean);
+               Xnew = min(ub,Xnew);
+               Xnew = max(lb,Xnew);
+              
+               fnew = fun(Xnew,lb,ub,htf(q,:));
+               if fnew < f(i)
+                   P(i,:) = Xnew;
+                   f(i) = fnew;
+               end
           
-           fnew = fun(Xnew,lb,ub,htf(q,:));
-           if fnew > f(i)
-               P(i,:) = Xnew;
-               f(i) = fnew;
-           end
-      
-           % Learner phase
-           p = randi([1 Np],1,1);  % selection of random partner
-           while i==p
-               p = randi([1 Np],1,1);
-           end
-           if f(i) < f(p)
-               Xnew = P(i,:) + rand(1,D).*(P(i,:) - P(p,:));
-           else
-               Xnew = P(i,:) - rand(1,D).*(P(i,:) - P(p,:));
-           end
-           Xnew = min(ub,Xnew);
-           Xnew = max(lb,Xnew);
-           fnew = fun(Xnew,lb,ub,htf(q,:));
-           if fnew > f(i)
-               P(i,:) = Xnew;
-               f(i) = fnew;
-           end
-       end
-    end
-    [bestfitness,ind] = min(f);
-    bestsol = P(ind,:);
-    temp = reshape(bestsol,n,[]);
-    temp = transpose(temp);
-    new_cost(:,:,q) = temp;
+               % Learner phase
+               p = randi([1 Np],1,1);  % selection of random partner
+               while i==p
+                   p = randi([1 Np],1,1);
+               end
+               if f(i) < f(p)
+                   Xnew = P(i,:) + rand(1,D).*(P(i,:) - P(p,:));
+               else
+                   Xnew = P(i,:) - rand(1,D).*(P(i,:) - P(p,:));
+               end
+               Xnew = min(ub,Xnew);
+               Xnew = max(lb,Xnew);
+               fnew = fun(Xnew,lb,ub,htf(q,:));
+               if fnew < f(i)
+                   P(i,:) = Xnew;
+                   f(i) = fnew;
+               end
+            end
 
-end    
+            ploty(t+1) = min(f);
+        end
+        [bestfitness,ind] = min(f);
+        bestsol = P(ind,:);
+        fitness_value(iteration) = min(f);
+
+        if min(f) < least_val
+            least_val = min(f);
+            temp = reshape(bestsol,n,[]);
+            temp = transpose(temp);
+            new_cost(:,:,q) = temp;
+        end
+        best_fitness_value = least_val;
+        
+        
+        %% plotting best fitness vs iteration
+
+          scatter(plotx,ploty)
+          xlabel('Iterations ->')
+          ylabel('Best fitness ->')
+          title('best fitness vs iterations')
+          ploty = [];
+
+        
+
+    end 
+
+    %% plotting best fitness vs iteration
+        
+       scatter(fun_eval,fitness_value)
+       xlabel('function evaluation ->')
+       ylabel('fitness value ->')
+       title('fitness value vs fitness evaluation')
+       fitness_value = [];
+        
+    %% plotting best fitness vs iteration
+
+      scatter(fun_eval,best_fitness_value)
+      xlabel('function evaluation ->')
+      ylabel('Best fitness value ->')
+      title('best fitness value vs function evaluation')
+      best_fitness_value = [];
+
+end
+
+
 
 %% removal of loss making rides
 
@@ -179,6 +234,7 @@ for k = 1:K
             if (ll_cost(i,j,k) > ul_cost(i,j,k))
                 new_cost(i,j,k) = -1;
             end
+            new_cost(i,j,k) = round(new_cost(i,j,k));
         end
     end
 end   
@@ -209,8 +265,8 @@ for k = 1:K
     Z = -1.*Z;
 
 
-    lb = zeros(1,n*n);
-    ub = zeros(1,n*n);
+    ilb = zeros(1,n*n);
+    iub = zeros(1,n*n);
     TEMP = zeros(n,n);
     for i = 1:n
         for j = 1:n
@@ -220,18 +276,26 @@ for k = 1:K
     end
 
     temp4 = TEMP;
-    ub = reshape(TEMP,1,[]);  
+    iub = reshape(TEMP,1,[]);  
     
     A = ones(1,n*n);
     b = max_cab(1,k);
     
     intcon = 1:n;
 
-    [X, FVAL] = intlinprog(Z,intcon,A,b,[],[],lb,ub);
+    [X, FVAL] = intlinprog(Z,intcon,A,b,[],[],ilb,iub);
     Cabs(:,:,k) = reshape(X,n,[]);
     Cabs(:,:,k) = transpose(Cabs(:,:,k));
 end    
+% ll_cost 
+% ul_cost
+% new_cost
+new_cost;
+Cabs;
 
-new_cost
-Cabs
+
+
+
+
+
 
